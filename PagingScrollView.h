@@ -22,8 +22,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-@protocol PagingScrollViewDelegate;
-@protocol PagingScrollViewDataSource;
+@protocol PagingScrollViewDelegate, PagingScrollViewDataSource;
 
 // View that supports horizontal paging of UIViews or UIViewControllers.
 // Discards offscreen UIViews/UIViewControllers to keep memory usage at a minimum.
