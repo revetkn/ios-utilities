@@ -27,9 +27,6 @@
 static NSTimeInterval const PageTransitionAnimationDuration = 0.3;
 
 @interface PagingScrollView()<UIScrollViewDelegate>
-
-@property (nonatomic, readonly) UIScrollView *scrollView;
-
 @end
 
 @implementation PagingScrollView  {
@@ -73,7 +70,6 @@ static NSTimeInterval const PageTransitionAnimationDuration = 0.3;
   
   NSUInteger pageNumber = roundf(xContentOffset / self.scrollView.bounds.size.width);
   if(pageNumber != _pageNumber) {
-    // LOG(@"Page number changed from %d to %d", _pageNumber, pageNumber);
     _pageNumber = pageNumber;
     
     if(!_busyRotating)
@@ -100,18 +96,24 @@ static NSTimeInterval const PageTransitionAnimationDuration = 0.3;
 }
 
 - (void)reloadData {
-  [_scrolledViewsByPageNumbers removeAllObjects];
-  
   for(NSNumber *pageNumber in _scrolledViewControllersByPageNumbers) {
     UIViewController *viewController = _scrolledViewControllersByPageNumbers[pageNumber];
+    
+    [viewController willMoveToParentViewController:nil];
+    [viewController.view removeFromSuperview];
     [viewController removeFromParentViewController];
   }
   
-  [_scrolledViewControllersByPageNumbers removeAllObjects];
+  for(NSNumber *pageNumber in _scrolledViewsByPageNumbers) {
+    UIView *view = _scrolledViewsByPageNumbers[pageNumber];        
+    [view removeFromSuperview];
+  }
+  
+  [_scrolledViewControllersByPageNumbers removeAllObjects];  
+  [_scrolledViewsByPageNumbers removeAllObjects];  
   
   _parentViewController = [self.dataSource respondsToSelector:@selector(parentViewControllerForPagingScrollView:)] ? [self.dataSource parentViewControllerForPagingScrollView:self] : nil;
   
-  [self.scrollView removeAllSubviews];
   [self recalculatePositioning];
   [self setPageNumber:0];
   
@@ -130,76 +132,72 @@ static NSTimeInterval const PageTransitionAnimationDuration = 0.3;
     return;
   
   CGFloat pageWidth = self.scrollView.width;
-  
+    
   if(xContentOffset < 0)
     xContentOffset = 0;
   
-  NSUInteger leftPageNumber = floorf(xContentOffset / pageWidth);
-  NSUInteger rightPageNumber = leftPageNumber + 1;
+  NSUInteger centerPageNumber = floorf(xContentOffset / pageWidth);
+  NSInteger leftPageNumber = centerPageNumber - 1;
+  NSUInteger rightPageNumber = centerPageNumber + 1;
+  
+  if(leftPageNumber < 0)
+    leftPageNumber = 0;
   
   if(rightPageNumber >= numberOfPages)
-    rightPageNumber = leftPageNumber;
-  
+    rightPageNumber = centerPageNumber;
+
   UIView *leftPageView = _scrolledViewsByPageNumbers[@(leftPageNumber)];
+  UIView *centerPageView = _scrolledViewsByPageNumbers[@(centerPageNumber)];
   UIView *rightPageView = _scrolledViewsByPageNumbers[@(rightPageNumber)];
   
-  // TODO: don't duplicate this code
+  if(!leftPageView && leftPageNumber != centerPageNumber)
+    [self loadPageView:leftPageView forPageWidth:pageWidth atPageNumber:leftPageNumber withReusablePageNumber:rightPageNumber + 3];
   
-  if(!leftPageView) {
-    NSNumber *reusableViewKey = @(rightPageNumber + 2);
-    UIView *reusableView = _scrolledViewsByPageNumbers[reusableViewKey];
-    
-    if(reusableView) {
-      [reusableView removeFromSuperview];
-      [_scrolledViewsByPageNumbers removeObjectForKey:reusableViewKey];
-      
-      UIViewController *viewController = _scrolledViewControllersByPageNumbers[reusableViewKey];
-      [viewController removeFromParentViewController];
+  if(!centerPageView)
+    [self loadPageView:centerPageView forPageWidth:pageWidth atPageNumber:centerPageNumber withReusablePageNumber:rightPageNumber + 2];
+  
+  if(!rightPageView && centerPageNumber != rightPageNumber)
+    [self loadPageView:rightPageView forPageWidth:pageWidth atPageNumber:rightPageNumber withReusablePageNumber:centerPageNumber - 2];
+}
+
+- (void)loadPageView:(UIView *)pageView forPageWidth:(CGFloat)pageWidth atPageNumber:(NSUInteger)pageNumber withReusablePageNumber:(NSUInteger)reusablePageNumber {
+  NSNumber *reusableViewKey = @(reusablePageNumber);
+  UIView *reusableView = _scrolledViewsByPageNumbers[reusableViewKey];
+  UIViewController *reusableViewController = _scrolledViewControllersByPageNumbers[reusableViewKey];
+  
+  if(reusableView) {        
+    if(reusableViewController) {
+      [reusableViewController willMoveToParentViewController:nil];
+      [reusableViewController.view removeFromSuperview];
+      [reusableViewController removeFromParentViewController];
       [_scrolledViewControllersByPageNumbers removeObjectForKey:reusableViewKey];
-    }
-    
-    if(_dataSourceUsesViews) {
-      leftPageView = [self.dataSource pagingScrollView:self viewForPageNumber:leftPageNumber reusableView:reusableView];
     } else {
-      UIViewController *leftPageViewController = [self.dataSource pagingScrollView:self viewControllerForPageNumber:leftPageNumber];
-      [_parentViewController addChildViewController:leftPageViewController];
-      _scrolledViewControllersByPageNumbers[@(leftPageNumber)] = leftPageViewController;
-      leftPageView = leftPageViewController.view;
+      [reusableView removeFromSuperview];
     }
-    
-    [self.scrollView addSubview:leftPageView];
-    
-    leftPageView.frame = CGRectMake(leftPageNumber * pageWidth, 0, pageWidth, self.scrollView.height);
-    _scrolledViewsByPageNumbers[@(leftPageNumber)] = leftPageView;
+
+    [_scrolledViewsByPageNumbers removeObjectForKey:reusableViewKey];
   }
   
-  if(!rightPageView && leftPageNumber != rightPageNumber) {
-    NSNumber *reusableViewKey = @(leftPageNumber - 2);
-    UIView *reusableView = _scrolledViewsByPageNumbers[reusableViewKey];
-    
-    if(reusableView) {
-      [reusableView removeFromSuperview];
-      [_scrolledViewsByPageNumbers removeObjectForKey:reusableViewKey];
-      
-      UIViewController *viewController = _scrolledViewControllersByPageNumbers[reusableViewKey];
-      [viewController removeFromParentViewController];
-      [_scrolledViewControllersByPageNumbers removeObjectForKey:reusableViewKey];
-    }
-    
-    if(_dataSourceUsesViews) {
-      rightPageView = [self.dataSource pagingScrollView:self viewForPageNumber:rightPageNumber reusableView:reusableView];
-    } else {
-      UIViewController *rightPageViewController = [self.dataSource pagingScrollView:self viewControllerForPageNumber:rightPageNumber];
-      [_parentViewController addChildViewController:rightPageViewController];
-      _scrolledViewControllersByPageNumbers[@(rightPageNumber)] = rightPageViewController;
-      rightPageView = rightPageViewController.view;
-    }
-    
-    [self.scrollView addSubview:rightPageView];
-    
-    rightPageView.frame = CGRectMake(rightPageNumber * pageWidth, 0, pageWidth, self.scrollView.height);
-    _scrolledViewsByPageNumbers[@(rightPageNumber)] = rightPageView;
+  UIViewController *pageViewController = nil;
+  
+  if(_dataSourceUsesViews) {
+    pageView = [self.dataSource pagingScrollView:self viewForPageNumber:pageNumber reusableView:reusableView];
+  } else {
+    pageViewController = [self.dataSource pagingScrollView:self viewControllerForPageNumber:pageNumber reusableViewController:reusableViewController];
+    [pageViewController willMoveToParentViewController:_parentViewController];    
+    [_parentViewController addChildViewController:pageViewController];
+    _scrolledViewControllersByPageNumbers[@(pageNumber)] = pageViewController;
+    pageView = pageViewController.view;
   }
+  
+  [self.scrollView addSubview:pageView];
+  
+  pageView.frame = CGRectMake(pageNumber * pageWidth, 0, pageWidth, self.scrollView.height);
+  
+  if(pageViewController)
+    [pageViewController didMoveToParentViewController:_parentViewController];
+  
+  _scrolledViewsByPageNumbers[@(pageNumber)] = pageView;
 }
 
 - (void)setPageNumber:(NSUInteger)pageNumber {
@@ -209,16 +207,15 @@ static NSTimeInterval const PageTransitionAnimationDuration = 0.3;
 - (void)setPageNumber:(NSUInteger)pageNumber animated:(BOOL)animated completionBlock:(void (^)(void))completionBlock {
   NSUInteger numberOfPages = [self.dataSource numberOfPagesInPagingScrollView:self];
   
-  if(pageNumber > numberOfPages - 1) {
-    // LOG(@"Asked to go to page %d but there are only %d pages according to the dataSource. Going to the last page instead.", pageNumber, numberOfPages);
+  // Can't go past the last page
+  if(pageNumber > numberOfPages - 1)
     pageNumber = numberOfPages - 1;
-  }
   
   BOOL notifyDelegate = _pageNumber != pageNumber && !_busyRotating;
   CGFloat xContentOffset = pageNumber * self.scrollView.width;
     
   _pageNumber = pageNumber;
-  
+
   [self loadViewsForXContentOffset:xContentOffset];
   
   void (^scrollToContentOffsetBlock)() = ^{
@@ -268,7 +265,7 @@ static NSTimeInterval const PageTransitionAnimationDuration = 0.3;
     //if(scrolledViewPageNumberAsInt != pageNumber)
     //  scrolledView.hidden = YES;
     
-		scrolledView.frame = CGRectMake(scrolledViewPageNumberAsInt * self.scrollView.width, 0, self.scrollView.width, self.scrollView.height);
+    scrolledView.frame = CGRectMake(scrolledViewPageNumberAsInt * self.scrollView.width, 0, self.scrollView.width, self.scrollView.height);
   }
   
   _recalculating = NO;
@@ -279,7 +276,7 @@ static NSTimeInterval const PageTransitionAnimationDuration = 0.3;
     return;
   
   BOOL dataSourceUsesViews = [dataSource respondsToSelector:@selector(pagingScrollView:viewForPageNumber:reusableView:)];
-  BOOL dataSourceUsesViewControllers = [dataSource respondsToSelector:@selector(pagingScrollView:viewControllerForPageNumber:)];
+  BOOL dataSourceUsesViewControllers = [dataSource respondsToSelector:@selector(pagingScrollView:viewControllerForPageNumber:reusableViewController:)];
   
   if(dataSource) {
     if(dataSourceUsesViews && dataSourceUsesViewControllers)
@@ -294,9 +291,10 @@ static NSTimeInterval const PageTransitionAnimationDuration = 0.3;
               "or pagingScrollView:viewControllerForPageNumber:."
                                    userInfo:nil];
     
-    // TODO: figure out why this check fails.  Probably a typo or something
-    //if(dataSourceUsesViewControllers && ![_dataSource respondsToSelector:@selector(parentViewControllerForPagingScrollView:)])
-    //  THROW_EXCEPTION(@"You must implement parentViewControllerForPagingScrollView:.");
+    if(dataSourceUsesViewControllers && ![dataSource respondsToSelector:@selector(parentViewControllerForPagingScrollView:)])
+      @throw [NSException exceptionWithName:NSInternalInconsistencyException
+                                     reason:@"You must implement parentViewControllerForPagingScrollView:."
+                                   userInfo:nil];
   }
   
   _dataSourceUsesViews = dataSourceUsesViews;

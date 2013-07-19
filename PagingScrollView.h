@@ -22,7 +22,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-@protocol PagingScrollViewDelegate, PagingScrollViewDataSource;
+@protocol PagingScrollViewDelegate;
+@protocol PagingScrollViewDataSource;
 
 // View that supports horizontal paging of UIViews or UIViewControllers.
 // Discards offscreen UIViews/UIViewControllers to keep memory usage at a minimum.
@@ -75,6 +76,8 @@
 // All in-memory view controllers being paged over
 @property (nonatomic, readonly) NSArray *viewControllers;
 
+@property (nonatomic, readonly) UIScrollView *scrollView;
+
 @property (nonatomic, weak) IBOutlet id<PagingScrollViewDelegate> delegate;
 @property (nonatomic, weak) IBOutlet id<PagingScrollViewDataSource> dataSource;
 
@@ -99,7 +102,7 @@
 - (UIView *)pagingScrollView:(PagingScrollView *)pagingScrollView viewForPageNumber:(NSUInteger)pageNumber reusableView:(UIView *)reusableView;
 
 // This variant is used if you're paging over view controllers.  Both methods must be implemented.
-- (UIViewController *)pagingScrollView:(PagingScrollView *)pagingScrollView viewControllerForPageNumber:(NSUInteger)pageNumber;
+- (UIViewController *)pagingScrollView:(PagingScrollView *)pagingScrollView viewControllerForPageNumber:(NSUInteger)pageNumber reusableViewController:(UIViewController *)reusableViewController;
 - (UIViewController *)parentViewControllerForPagingScrollView:(PagingScrollView *)pagingScrollView;
 
 @end
